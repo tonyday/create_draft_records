@@ -1,0 +1,86 @@
+## Challenge
+. To conduct some testing we needed to duplicate the `Order` and `OrderLine` records associated to a given Customer and mark them as "draft"
+. The volume of associated records (several hundred thousands) meant that using Rails ActiveRecord would have been prohibitively slow.
+
+## Models
+Please note that the model names have been changed from the original problem domain.
+
+```ruby
+class Customer < ApplicationRecord
+  has_many :orders
+end
+
+class Order < ApplicationRecord
+  belongs_to :customer
+  has_many :order_lines
+end
+
+class OrderLine < ApplicationRecord
+  belongs_to :order
+end
+```
+
+## Solution
+Given that the volume of records would have made a "row at a time" approach unusably slow we chose to try an `SQL` based "bulk insert" approach.
+
+### Initial problem with using SQL
+
+If we only needed to copy the `orders` records it would have been straightforward using something like the following (most columns omitted for brevity)
+
+```SQL
+INSERT INTO orders
+( customer_id
+, draft)
+SELECT customer_id
+     , true AS draft
+FROM orders
+WHERE customer_id = 1
+;
+```
+
+
+However, the challenge when using `SQL` was trying to figure out how to populate `order_id` when copying related `order_lines` records.
+
+### Proposed approach
+
+. Retrieve the maximum `id` from `orders`
++
+```SQL
+select MAX(id) AS MAX_ORDER_ID
+from orders
+;
+
+```
+
+. When copying `orders` records explicitly set the `id` using the original value plus `max_order_id`
++
+```SQL
+INSERT INTO orders
+( id
+, customer_id
+, draft)
+SELECT id + MAX_ORDER_ID
+     , customer_id
+     , true AS draft
+FROM orders
+WHERE customer_id = 1
+;
+```
+
+. When copying `order_lines` records set the `order_id` using the original value plus `MAX_ORDER_ID`
++
+```SQL
+INSERT INTO order_lines
+    (order_id)
+SELECT order_id + MAX_ORDER_ID AS order_id
+FROM order_lines
+WHERE order_id IN (SELECT id
+                   FROM orders
+                   WHERE customer_id = 1 AND draft = false)
+;
+
+```
+
+### Outcome
+* We were able to duplicate the required records very quickly (sub 10 seconds for all records).
+* While not "production ready" the approach that we took addressed the requirement we had (with regard to testing) and was both quick to develop and execute.
