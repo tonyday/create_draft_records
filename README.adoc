@@ -52,7 +52,7 @@ from orders
 
 ```
 
-. When copying `orders` records explicitly set the `id` using the original value plus `max_order_id`
+. When copying `orders` records explicitly set the `id` using the original value plus `MAX_ORDER_ID`
 +
 ```SQL
 INSERT INTO orders
